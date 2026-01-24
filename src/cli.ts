@@ -134,22 +134,21 @@ Commands:
     return
   }
 
-  let ctx
+  let ctx: Context
   try {
     ctx = await getContext()
-  } catch (err) {
+  } catch {
     consola.error('Run this from inside a git repository')
     process.exit(1)
   }
 
   try {
-    // Interactive mode when no command
     if (!cmd) {
       await interactive(ctx)
       return
     }
 
-    const commands = {
+    const commands: Record<string, () => Promise<void>> = {
       create: () => create(positional[0], { ...ctx, createPr: flags.includes('--pr') }),
       clone: () => clone(ctx),
       list: () => list(ctx),
@@ -164,7 +163,7 @@ Commands:
 
     await commands[cmd]()
   } catch (err) {
-    consola.error(err.message)
+    consola.error((err as Error).message)
     process.exit(1)
   }
 }
