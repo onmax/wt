@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,4 +19,6 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install
-      - run: node cli.mjs --help
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: node dist/cli.js --help

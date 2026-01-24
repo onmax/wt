@@ -1,20 +1,19 @@
-import { execSync, spawn } from 'child_process'
+import { execSync, spawn } from 'node:child_process'
 import { consola } from 'consola'
+import type { Context } from './context.js'
 
-function exec(cmd, opts = {}) {
+function exec(cmd: string, opts: { cwd?: string } = {}): string {
   return execSync(cmd, { encoding: 'utf8', ...opts }).trim()
 }
 
-export async function clean(prArg, ctx) {
-  const { cwd, mainRepoPath } = ctx
+export async function clean(prArg: string | undefined, ctx: Context): Promise<void> {
+  const { cwd } = ctx
 
-  // Determine PR number
   let prNumber = prArg
 
   if (!prNumber) {
-    // Try to get PR for current branch
     try {
-      const prJson = exec(`gh pr view --json number`, { cwd })
+      const prJson = exec('gh pr view --json number', { cwd })
       prNumber = JSON.parse(prJson).number
     } catch {
       consola.error('No PR found for current branch. Usage: wt clean [pr-number]')
@@ -24,7 +23,6 @@ export async function clean(prArg, ctx) {
 
   consola.info(`Spawning Claude to clean PR #${prNumber}...`)
 
-  // Spawn Claude with the clean task
   const claude = spawn('claude', [
     '--print',
     `Check PR #${prNumber} status:

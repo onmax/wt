@@ -1,9 +1,23 @@
-import { execSync } from 'child_process'
-import { existsSync, readFileSync } from 'fs'
-import { basename, dirname, join } from 'path'
-import { homedir } from 'os'
+import { execSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
+import { homedir } from 'node:os'
 
-function loadConfig() {
+export interface Context {
+  repoRoot: string
+  mainRepoPath: string
+  mainRepoName: string
+  worktreesPath: string
+  owner: string
+  name: string
+  defaultBranch: string
+  envPath: string | null
+  cwd: string
+  createPr?: boolean
+  issueUrl?: string
+}
+
+function loadConfig(): Record<string, string> {
   const configPath = join(homedir(), '.config/wt/config.json')
   if (!existsSync(configPath)) return {}
   try {
@@ -11,13 +25,12 @@ function loadConfig() {
   } catch { return {} }
 }
 
-function exec(cmd) {
+function exec(cmd: string): string {
   return execSync(cmd, { encoding: 'utf8' }).trim()
 }
 
-export async function getContext() {
-  // Get git root
-  let repoRoot
+export async function getContext(): Promise<Context> {
+  let repoRoot: string
   try {
     repoRoot = exec('git rev-parse --show-toplevel')
   } catch {
@@ -26,20 +39,17 @@ export async function getContext() {
 
   const repoName = basename(repoRoot)
   const parentDir = dirname(repoRoot)
+  const isWorktree = repoName.includes('-worktrees') || !existsSync(join(repoRoot, '.git'))
 
-  // Detect if we're in a worktree or main repo
-  const isWorktree = repoName.includes('-worktrees') || existsSync(join(repoRoot, '.git')) === false
-
-  // Derive main repo and worktrees paths
-  let mainRepoPath, worktreesPath, mainRepoName
+  let mainRepoPath: string
+  let worktreesPath: string
+  let mainRepoName: string
 
   if (repoName.endsWith('-worktrees')) {
-    // We're in the worktrees directory itself (unlikely but handle it)
     mainRepoName = repoName.replace('-worktrees', '')
     mainRepoPath = join(parentDir, mainRepoName)
     worktreesPath = repoRoot
   } else if (isWorktree) {
-    // We're inside a worktree - parent is *-worktrees folder
     const worktreesDir = dirname(repoRoot)
     const worktreesDirName = basename(worktreesDir)
     if (worktreesDirName.endsWith('-worktrees')) {
@@ -50,16 +60,16 @@ export async function getContext() {
       throw new Error('Cannot determine main repo from worktree')
     }
   } else {
-    // We're in the main repo
     mainRepoName = repoName
     mainRepoPath = repoRoot
     worktreesPath = join(parentDir, `${repoName}-worktrees`)
   }
 
-  // Get repo info from GitHub
-  let owner, name, defaultBranch
+  let owner: string
+  let name: string
+  let defaultBranch: string
   try {
-    const json = exec(`gh repo view --json owner,name,defaultBranchRef`)
+    const json = exec('gh repo view --json owner,name,defaultBranchRef')
     const data = JSON.parse(json)
     owner = data.owner.login
     name = data.name
@@ -68,14 +78,12 @@ export async function getContext() {
     throw new Error('Failed to get repo info from GitHub')
   }
 
-  // Check for custom worktree path in config
   const config = loadConfig()
   const repoKey = `${owner}/${name}`
   if (config[repoKey]) {
     worktreesPath = config[repoKey].replace(/^~/, homedir())
   }
 
-  // Find .env in main repo
   const envPath = join(mainRepoPath, '.env')
   const hasEnv = existsSync(envPath)
 

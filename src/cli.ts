@@ -1,37 +1,41 @@
 #!/usr/bin/env node
-import { execSync } from 'child_process'
+import { execSync } from 'node:child_process'
 import { consola } from 'consola'
 import * as p from '@clack/prompts'
-import { getContext } from './lib/context.mjs'
-import { create } from './lib/create.mjs'
-import { clone } from './lib/clone.mjs'
-import { list } from './lib/list.mjs'
-import { sync } from './lib/sync.mjs'
-import { clean } from './lib/clean.mjs'
+import type { Context } from './context.js'
+import { getContext } from './context.js'
+import { create } from './create.js'
+import { clone } from './clone.js'
+import { list } from './list.js'
+import { sync } from './sync.js'
+import { clean } from './clean.js'
 
 const [,, cmd, ...args] = process.argv
 const flags = args.filter(a => a.startsWith('--'))
 const positional = args.filter(a => !a.startsWith('--'))
 
-function exec(cmd) {
-  return execSync(cmd, { encoding: 'utf8' }).trim()
+function exec(command: string): string {
+  return execSync(command, { encoding: 'utf8' }).trim()
 }
 
-function slugify(text) {
+function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40).replace(/-$/g, '')
 }
 
-async function fetchIssues(ctx) {
+interface Issue { number: number, title: string, author?: { login: string }, comments?: unknown[] }
+interface PR { number: number, title: string, headRefName: string }
+
+function fetchIssues(ctx: Context): Issue[] {
   const json = exec(`gh issue list --repo ${ctx.owner}/${ctx.name} --state open --limit 20 --json number,title,author,comments`)
   return JSON.parse(json)
 }
 
-async function fetchPRs(ctx) {
+function fetchPRs(ctx: Context): PR[] {
   const json = exec(`gh pr list --repo ${ctx.owner}/${ctx.name} --state open --limit 20 --json number,title,headRefName`)
   return JSON.parse(json)
 }
 
-async function interactive(ctx) {
+async function interactive(ctx: Context): Promise<void> {
   p.intro('wt - worktrees CLI')
 
   const command = await p.select({
