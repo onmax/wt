@@ -1,5 +1,6 @@
 {
   "name": "@onmax/wt",
+  "packageManager": "pnpm@10.0.0",
   "version": "0.1.0",
   "description": "Git worktrees CLI with GitHub integration and Claude Code support",
   "type": "module",
