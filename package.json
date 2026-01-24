@@ -1,0 +1,16 @@
+{
+  "name": "@onmax/wt",
+  "version": "0.1.0",
+  "description": "Git worktrees CLI with GitHub integration and Claude Code support",
+  "type": "module",
+  "bin": { "wt": "./cli.mjs" },
+  "files": ["cli.mjs", "lib"],
+  "repository": { "type": "git", "url": "git+https://github.com/onmax/wt.git" },
+  "homepage": "https://github.com/onmax/wt#readme",
+  "bugs": { "url": "https://github.com/onmax/wt/issues" },
+  "author": "Max <maximogarciamtnez@gmail.com>",
+  "license": "MIT",
+  "keywords": ["git", "worktrees", "cli", "github", "workflow"],
+  "engines": { "node": ">=20" },
+  "dependencies": { "@clack/prompts": "^0.11.0", "consola": "^3.4.2" }
+}
