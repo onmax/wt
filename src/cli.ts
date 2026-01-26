@@ -5,7 +5,7 @@ import * as p from '@clack/prompts'
 import type { Context } from './context.js'
 import { getContext } from './context.js'
 import { create } from './create.js'
-import { clone } from './clone.js'
+import { clone, cloneWorktree } from './clone.js'
 import { list } from './list.js'
 import { sync } from './sync.js'
 import { clean } from './clean.js'
@@ -83,7 +83,7 @@ async function interactive(ctx: Context): Promise<void> {
     } else if (source === 'pr') {
       const spinner = p.spinner()
       spinner.start('Fetching PRs...')
-      const prs = await fetchPRs(ctx)
+      const prs = fetchPRs(ctx)
       spinner.stop()
       if (!prs.length) { consola.warn('No open PRs'); return }
       const pr = await p.select({
@@ -91,7 +91,12 @@ async function interactive(ctx: Context): Promise<void> {
         options: prs.map(pr => ({ value: pr, label: `#${pr.number} ${pr.title}` })),
       })
       if (p.isCancel(pr)) return process.exit(0)
-      branch = pr.headRefName
+      const prUrl = `https://github.com/${ctx.owner}/${ctx.name}/pull/${pr.number}`
+      const prompt = await p.text({ message: 'Claude prompt:', placeholder: `Continue working on: ${prUrl}` })
+      if (p.isCancel(prompt)) return process.exit(0)
+      await cloneWorktree(ctx, pr.headRefName, prompt || `Continue working on: ${prUrl}`)
+      p.outro('Done!')
+      return
     } else {
       branch = await p.text({ message: 'Branch name:', placeholder: 'fix-something' })
       if (p.isCancel(branch)) return process.exit(0)
