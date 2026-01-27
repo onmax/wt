@@ -28,13 +28,23 @@ The CLI guides you through creating worktrees from issues, PRs, or custom branch
 
 | Command | Description |
 |---------|-------------|
-| `wt` | Interactive mode with prompts |
-| `wt create <branch>` | Create a worktree with a new branch |
-| `wt create <branch> --pr` | Create worktree and open a draft PR |
-| `wt clone` | Clone an existing PR as a worktree |
-| `wt list` | Show all worktrees with PR status |
-| `wt sync` | Pull latest changes from the base branch |
-| `wt clean [pr]` | Verify CI and prepare for merge |
+| `wt` | fzf picker → cd into worktree |
+| `wt add [ref]` | Smart add (see examples below) |
+| `wt add [ref] --pr` | Create worktree and open a draft PR |
+| `wt ls` | List worktrees with PR/CI status |
+| `wt rm [name]` | Remove worktree |
+| `wt sync` | Rebase on base branch |
+| `wt ci` | Show CI status for current PR |
+
+### Add Examples
+
+```bash
+wt add                 # interactive: pick issue/PR/custom
+wt add fix-bug         # new branch from default
+wt add #123            # auto-detect: issue or PR
+wt add @branch         # clone existing remote branch
+wt add fix-bug --pr    # create draft PR
+```
 
 ### Interactive Mode
 

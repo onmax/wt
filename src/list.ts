@@ -1,5 +1,6 @@
-import { execSync, spawnSync } from 'node:child_process'
+import { execSync } from 'node:child_process'
 import { consola } from 'consola'
+import * as p from '@clack/prompts'
 import type { Context } from './context.js'
 
 function exec(cmd: string, opts: { cwd?: string } = {}): string {
@@ -16,7 +17,7 @@ export function getWorktrees(ctx: Context): Worktree[] {
 
   for (const line of lines) {
     if (line.startsWith('worktree ')) {
-      if (current.path && current.branch) worktrees.push({ path: current.path, branch: current.branch })
+      if (current.path && current.branch && !current.bare) worktrees.push({ path: current.path, branch: current.branch })
       current = { path: line.replace('worktree ', '') }
     } else if (line.startsWith('branch ')) {
       current.branch = line.replace('branch refs/heads/', '')
@@ -26,22 +27,20 @@ export function getWorktrees(ctx: Context): Worktree[] {
   }
   if (current.path && current.branch && !current.bare) worktrees.push({ path: current.path, branch: current.branch })
 
-  return worktrees.filter(w => w.path !== ctx.mainRepoPath)
+  return worktrees
 }
 
-// fzf picker returning selected worktree path
-export function pickWorktree(ctx: Context): string | null {
+// Interactive picker returning selected worktree path
+export async function pickWorktree(ctx: Context): Promise<string | null> {
   const wts = getWorktrees(ctx)
   if (wts.length === 0) return null
 
-  const choices = wts.map(w => `${w.branch}\t${w.path}`)
-  const result = spawnSync('fzf', ['--header=Select worktree', '--delimiter=\t', '--with-nth=1'], {
-    input: choices.join('\n'), encoding: 'utf8', stdio: ['pipe', 'pipe', 'inherit'],
+  const selected = await p.select({
+    message: 'Select worktree:',
+    options: wts.map(w => ({ value: w.path, label: w.branch })),
   })
-
-  if (result.status !== 0 || !result.stdout?.trim()) return null
-  const [, path] = result.stdout.trim().split('\t')
-  return path
+  if (p.isCancel(selected)) return null
+  return selected
 }
 
 interface PR { headRefName: string, number: number, statusCheckRollup?: { conclusion: string }[] }

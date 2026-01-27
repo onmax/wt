@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 import { consola } from 'consola'
+import * as p from '@clack/prompts'
 import type { Context } from './context.js'
 import { getContext } from './context.js'
+import { init } from './init.js'
 import { add } from './add.js'
 import { list, pickWorktree } from './list.js'
 import { rm } from './rm.js'
@@ -19,7 +21,8 @@ async function main() {
 wt - git worktrees CLI
 
 Commands:
-  wt                     fzf picker → cd into worktree
+  wt init <url> [name]   clone repo with bare pattern
+  wt                     picker → cd into worktree
   wt add [ref] [--pr]    smart add (see below)
   wt ls                  list worktrees with PR/CI status
   wt rm [name]           remove worktree
@@ -36,20 +39,34 @@ wt add examples:
     return
   }
 
+  // Early exit for init (runs outside repo)
+  if (cmd === 'init') {
+    if (!positional[0]) {
+      consola.error('Usage: wt init <url> [name]')
+      process.exit(1)
+    }
+    await init(positional[0], positional[1])
+    return
+  }
+
   let ctx: Context
   try {
     ctx = await getContext()
-  } catch {
-    consola.error('Run from inside a git repository')
+  } catch (err) {
+    consola.error((err as Error).message)
     process.exit(1)
   }
 
   try {
-    // No command = fzf picker
+    // No command = picker
     if (!cmd) {
-      const wtPath = pickWorktree(ctx)
+      const wtPath = await pickWorktree(ctx)
       if (!wtPath) {
         consola.info('No worktrees found')
+        const create = await p.confirm({ message: 'Create one?', initialValue: true })
+        if (!p.isCancel(create) && create) {
+          await add(undefined, ctx, {})
+        }
         return
       }
       spawnSync(process.env.SHELL || 'zsh', [], { cwd: wtPath, stdio: 'inherit' })

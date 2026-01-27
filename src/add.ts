@@ -72,11 +72,6 @@ async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?:
   const { baseBranch = defaultBranch, trackRemote = false, createPr = false } = opts
   const user = getGitUser()
 
-  if (!existsSync(worktreesPath)) {
-    mkdirSync(worktreesPath, { recursive: true })
-    consola.info(`Created: ${worktreesPath}`)
-  }
-
   const worktreePath = join(worktreesPath, branch)
 
   if (existsSync(worktreePath)) {
@@ -92,9 +87,9 @@ async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?:
 
     const branchExists = execSafe(`git rev-parse --verify ${branch}`, { cwd: mainRepoPath }) !== null
     if (branchExists) {
-      exec(`git worktree add "${worktreePath}" ${branch}`, { cwd: mainRepoPath })
+      exec(`git worktree add ../${branch} ${branch}`, { cwd: mainRepoPath })
     } else {
-      exec(`git worktree add --track -b ${branch} "${worktreePath}" origin/${branch}`, { cwd: mainRepoPath })
+      exec(`git worktree add --track -b ${branch} ../${branch} origin/${branch}`, { cwd: mainRepoPath })
     }
   } else {
     // Create new branch from base
@@ -102,7 +97,7 @@ async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?:
     exec(`git fetch origin ${baseBranch}`, { cwd: mainRepoPath })
 
     consola.start(`Creating: ${branch}`)
-    exec(`git worktree add -b ${branch} "${worktreePath}" origin/${baseBranch}`, { cwd: mainRepoPath })
+    exec(`git worktree add -b ${branch} ../${branch} origin/${baseBranch}`, { cwd: mainRepoPath })
 
     let useFork = false
     consola.start('Pushing branch...')
@@ -173,14 +168,12 @@ export async function add(ref: string | undefined, ctx: Context, flags: { pr?: b
       spinner.stop()
       if (!prs.length) { consola.warn('No open PRs'); return }
 
-      const choices = prs.map(pr => `#${pr.number}\t${pr.headRefName}\t${pr.title}`)
-      const fzfInput = choices.join('\n')
-      const result = spawnSync('fzf', ['--header=Select PR', '--delimiter=\t', '--with-nth=1,3'], {
-        input: fzfInput, encoding: 'utf8', stdio: ['pipe', 'pipe', 'inherit'],
+      const pr = await p.select({
+        message: 'Select PR:',
+        options: prs.map(pr => ({ value: pr, label: `#${pr.number} ${pr.title}`, hint: pr.headRefName })),
       })
-      if (result.status !== 0 || !result.stdout?.trim()) { consola.info('Cancelled'); return }
-      const [, branch] = result.stdout.trim().split('\t')
-      await createWorktree(ctx, branch, { trackRemote: true })
+      if (p.isCancel(pr)) return process.exit(0)
+      await createWorktree(ctx, pr.headRefName, { trackRemote: true })
       return
     }
 

@@ -1,7 +1,6 @@
 import { execSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { homedir } from 'node:os'
 
 export interface Context {
   repoRoot: string
@@ -17,14 +16,6 @@ export interface Context {
   issueUrl?: string
 }
 
-function loadConfig(): Record<string, string> {
-  const configPath = join(homedir(), '.config/wt/config.json')
-  if (!existsSync(configPath)) return {}
-  try {
-    return JSON.parse(readFileSync(configPath, 'utf8'))
-  } catch { return {} }
-}
-
 function exec(cmd: string): string {
   return execSync(cmd, { encoding: 'utf8' }).trim()
 }
@@ -37,42 +28,17 @@ export async function getContext(): Promise<Context> {
     throw new Error('Not in a git repository')
   }
 
-  const repoName = basename(repoRoot)
+  // Bare repo pattern: look for repo.git/ in parent
   const parentDir = dirname(repoRoot)
+  const bareGitPath = join(parentDir, 'repo.git')
 
-  // Check if we're in a worktree (not the main repo)
-  const gitDir = exec('git rev-parse --git-dir')
-  const isWorktree = gitDir.includes('.git/worktrees') || gitDir.includes('.git/.worktrees')
-
-  let mainRepoPath: string
-  let worktreesPath: string
-  let mainRepoName: string
-
-  if (isWorktree) {
-    // We're in a worktree - find main repo from git dir
-    // gitDir will be like /path/to/repo/.git/.worktrees/branch-name or /path/to/repo/.git/worktrees/branch-name
-    const match = gitDir.match(/(.+)\/\.git\/\.?worktrees\//)
-    if (match) {
-      mainRepoPath = match[1]
-      mainRepoName = basename(mainRepoPath)
-      worktreesPath = join(mainRepoPath, '.git', '.worktrees')
-    } else {
-      // Legacy: sibling -worktrees folder
-      const worktreesDir = dirname(repoRoot)
-      const worktreesDirName = basename(worktreesDir)
-      if (worktreesDirName.endsWith('-worktrees')) {
-        mainRepoName = worktreesDirName.replace('-worktrees', '')
-        mainRepoPath = join(dirname(worktreesDir), mainRepoName)
-        worktreesPath = worktreesDir
-      } else {
-        throw new Error('Cannot determine main repo from worktree')
-      }
-    }
-  } else {
-    mainRepoName = repoName
-    mainRepoPath = repoRoot
-    worktreesPath = join(repoRoot, '.git', '.worktrees')
+  if (!existsSync(bareGitPath)) {
+    throw new Error('Not a wt repo. Use `wt init <url>` to create one.')
   }
+
+  const mainRepoPath = bareGitPath
+  const worktreesPath = parentDir
+  const mainRepoName = basename(parentDir)
 
   let owner: string
   let name: string
@@ -87,13 +53,7 @@ export async function getContext(): Promise<Context> {
     throw new Error('Failed to get repo info from GitHub')
   }
 
-  const config = loadConfig()
-  const repoKey = `${owner}/${name}`
-  if (config[repoKey]) {
-    worktreesPath = config[repoKey].replace(/^~/, homedir())
-  }
-
-  const envPath = join(mainRepoPath, '.env')
+  const envPath = join(repoRoot, '.env')
   const hasEnv = existsSync(envPath)
 
   return { repoRoot, mainRepoPath, mainRepoName, worktreesPath, owner, name, defaultBranch, envPath: hasEnv ? envPath : null, cwd: process.cwd() }
