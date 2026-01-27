@@ -14,6 +14,9 @@ importers:
       consola:
         specifier: ^3.4.2
         version: 3.4.2
+      tinyglobby:
+        specifier: ^0.2.12
+        version: 0.2.15
     devDependencies:
       '@types/node':
         specifier: ^22.0.0

@@ -1,5 +1,6 @@
-import { execSync, spawnSync } from 'node:child_process'
+import { execSync } from 'node:child_process'
 import { consola } from 'consola'
+import * as p from '@clack/prompts'
 import type { Context } from './context.js'
 import { getWorktrees } from './list.js'
 
@@ -14,28 +15,21 @@ export async function rm(name: string | undefined, ctx: Context): Promise<void> 
   let branch: string | undefined
 
   if (!name) {
-    // Interactive: fzf picker
     const wts = getWorktrees(ctx)
     if (wts.length === 0) {
       consola.info('No worktrees')
       return
     }
 
-    const choices = wts.map(w => `${w.branch}\t${w.path}`)
-    const result = spawnSync('fzf', ['--header=Select worktree to remove', '--delimiter=\t', '--with-nth=1'], {
-      input: choices.join('\n'), encoding: 'utf8', stdio: ['pipe', 'pipe', 'inherit'],
+    const selected = await p.select({
+      message: 'Remove worktree:',
+      options: wts.map(w => ({ value: w, label: w.branch, hint: w.path })),
     })
+    if (p.isCancel(selected)) return process.exit(0)
 
-    if (result.status !== 0 || !result.stdout?.trim()) {
-      consola.info('Cancelled')
-      return
-    }
-
-    const [selectedBranch, selectedPath] = result.stdout.trim().split('\t')
-    branch = selectedBranch
-    wtPath = selectedPath
+    branch = selected.branch
+    wtPath = selected.path
   } else {
-    // Find by name
     const wts = getWorktrees(ctx)
     const found = wts.find(w => w.branch === name || w.path.endsWith(`/${name}`))
     if (!found) {
@@ -45,6 +39,9 @@ export async function rm(name: string | undefined, ctx: Context): Promise<void> 
     branch = found.branch
     wtPath = found.path
   }
+
+  const confirmed = await p.confirm({ message: `Remove ${branch}?` })
+  if (!confirmed || p.isCancel(confirmed)) return process.exit(0)
 
   consola.start(`Removing: ${branch}`)
   exec(`git worktree remove "${wtPath}" --force`, { cwd: mainRepoPath })

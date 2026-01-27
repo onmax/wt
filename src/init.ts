@@ -1,7 +1,10 @@
 import { execSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, copyFileSync } from 'node:fs'
+import { existsSync, mkdirSync, copyFileSync, writeFileSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { consola } from 'consola'
+import { globSync } from 'tinyglobby'
+
+const DEFAULT_PROPAGATE_PATTERNS = ['.env', '.env.*', '.env.local']
 
 function exec(cmd: string, opts?: { cwd?: string }): string {
   return execSync(cmd, { encoding: 'utf8', ...opts }).trim()
@@ -42,11 +45,16 @@ export async function init(url: string, name?: string): Promise<void> {
 
   const mainPath = join(containerPath, 'main')
 
-  // Copy .env if exists in cwd
-  const envPath = join(process.cwd(), '.env')
-  if (existsSync(envPath)) {
-    copyFileSync(envPath, join(mainPath, '.env'))
-    consola.success('Copied .env')
+  // Create .wt-propagate with defaults
+  writeFileSync(join(containerPath, '.wt-propagate'), DEFAULT_PROPAGATE_PATTERNS.join('\n'))
+
+  // Copy matching files from cwd to main worktree
+  for (const pattern of DEFAULT_PROPAGATE_PATTERNS) {
+    const files = globSync(pattern, { cwd: process.cwd(), dot: true })
+    for (const file of files) {
+      copyFileSync(join(process.cwd(), file), join(mainPath, file))
+      consola.success(`Copied ${file}`)
+    }
   }
 
   // Install dependencies if package.json exists

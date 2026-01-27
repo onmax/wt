@@ -1,8 +1,9 @@
 import { execSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, copyFileSync } from 'node:fs'
+import { existsSync, copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { consola } from 'consola'
 import * as p from '@clack/prompts'
+import { globSync } from 'tinyglobby'
 import type { Context } from './context.js'
 
 function exec(cmd: string, opts: { cwd?: string } = {}): string {
@@ -15,6 +16,24 @@ function execSafe(cmd: string, opts: { cwd?: string } = {}): string | null {
 
 function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40).replace(/-$/g, '')
+}
+
+function flattenBranch(branch: string): string {
+  return branch.replace(/\//g, '-')
+}
+
+function copyIgnoredFiles(patterns: string[], srcDir: string, destDir: string): void {
+  for (const pattern of patterns) {
+    const files = globSync(pattern, { cwd: srcDir, dot: true })
+    for (const file of files) {
+      const src = join(srcDir, file)
+      const dest = join(destDir, file)
+      if (existsSync(src)) {
+        copyFileSync(src, dest)
+        consola.success(`Copied ${file}`)
+      }
+    }
+  }
 }
 
 function getGitUser(): string | null {
@@ -68,11 +87,11 @@ function detectRefType(ctx: Context, num: number): { type: 'issue' | 'pr', data:
 }
 
 async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?: string, trackRemote?: boolean, createPr?: boolean, issueUrl?: string } = {}): Promise<void> {
-  const { mainRepoPath, worktreesPath, owner, name, defaultBranch, envPath } = ctx
+  const { mainRepoPath, worktreesPath, owner, name, defaultBranch } = ctx
   const { baseBranch = defaultBranch, trackRemote = false, createPr = false } = opts
   const user = getGitUser()
 
-  const worktreePath = join(worktreesPath, branch)
+  const worktreePath = join(worktreesPath, flattenBranch(branch))
 
   if (existsSync(worktreePath)) {
     consola.warn(`Already exists: ${worktreePath}`)
@@ -121,10 +140,8 @@ async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?:
     }
   }
 
-  if (envPath) {
-    const destEnv = join(worktreePath, '.env')
-    copyFileSync(envPath, destEnv)
-    consola.success('Copied .env')
+  if (ctx.propagatePatterns.length) {
+    copyIgnoredFiles(ctx.propagatePatterns, ctx.worktreesPath, worktreePath)
   }
 
   // Install dependencies if package.json exists
