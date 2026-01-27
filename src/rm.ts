@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execSync, spawnSync } from 'node:child_process'
 import { consola } from 'consola'
 import * as p from '@clack/prompts'
 import type { Context } from './context.js'
@@ -46,4 +46,6 @@ export async function rm(name: string | undefined, ctx: Context): Promise<void> 
   consola.start(`Removing: ${branch}`)
   exec(`git worktree remove "${wtPath}" --force`, { cwd: mainRepoPath })
   consola.success(`Removed: ${branch}`)
+
+  spawnSync(process.env.SHELL || 'zsh', [], { cwd: ctx.worktreesPath, stdio: 'inherit' })
 }
