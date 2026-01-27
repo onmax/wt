@@ -104,19 +104,21 @@ async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?:
     consola.start(`Fetching: ${branch}`)
     exec(`git fetch origin ${branch}`, { cwd: mainRepoPath })
 
+    const flatBranch = flattenBranch(branch)
     const branchExists = execSafe(`git rev-parse --verify ${branch}`, { cwd: mainRepoPath }) !== null
     if (branchExists) {
-      exec(`git worktree add ../${branch} ${branch}`, { cwd: mainRepoPath })
+      exec(`git worktree add ../${flatBranch} ${branch}`, { cwd: mainRepoPath })
     } else {
-      exec(`git worktree add --track -b ${branch} ../${branch} origin/${branch}`, { cwd: mainRepoPath })
+      exec(`git worktree add --track -b ${branch} ../${flatBranch} origin/${branch}`, { cwd: mainRepoPath })
     }
   } else {
     // Create new branch from base
     consola.start(`Fetching ${baseBranch}...`)
     exec(`git fetch origin ${baseBranch}`, { cwd: mainRepoPath })
 
+    const flatBranch = flattenBranch(branch)
     consola.start(`Creating: ${branch}`)
-    exec(`git worktree add -b ${branch} ../${branch} origin/${baseBranch}`, { cwd: mainRepoPath })
+    exec(`git worktree add -b ${branch} ../${flatBranch} origin/${baseBranch}`, { cwd: mainRepoPath })
 
     let useFork = false
     consola.start('Pushing branch...')
