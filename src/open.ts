@@ -44,12 +44,17 @@ export async function open(ctx: Context): Promise<void> {
   })
   if (p.isCancel(selected)) return process.exit(0)
 
-  launchInWorktree(selected)
+  const prompt = await p.text({ message: 'Prompt (empty to skip):', placeholder: '', defaultValue: '' })
+  if (p.isCancel(prompt)) return process.exit(0)
+
+  launchInWorktree(selected, prompt || undefined)
 }
 
-export function launchInWorktree(wtPath: string): void {
+export function launchInWorktree(wtPath: string, prompt?: string): void {
   consola.info('Launching Claude in plan mode...')
-  spawnSync('claude', ['--permission-mode', 'plan', '--allow-dangerously-skip-permissions'], {
+  const args = ['--permission-mode', 'plan', '--allow-dangerously-skip-permissions']
+  if (prompt) args.push(prompt)
+  spawnSync('claude', args, {
     cwd: wtPath,
     stdio: 'inherit',
   })
