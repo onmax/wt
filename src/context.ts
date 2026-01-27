@@ -39,30 +39,39 @@ export async function getContext(): Promise<Context> {
 
   const repoName = basename(repoRoot)
   const parentDir = dirname(repoRoot)
-  const isWorktree = repoName.includes('-worktrees') || !existsSync(join(repoRoot, '.git'))
+
+  // Check if we're in a worktree (not the main repo)
+  const gitDir = exec('git rev-parse --git-dir')
+  const isWorktree = gitDir.includes('.git/worktrees') || gitDir.includes('.git/.worktrees')
 
   let mainRepoPath: string
   let worktreesPath: string
   let mainRepoName: string
 
-  if (repoName.endsWith('-worktrees')) {
-    mainRepoName = repoName.replace('-worktrees', '')
-    mainRepoPath = join(parentDir, mainRepoName)
-    worktreesPath = repoRoot
-  } else if (isWorktree) {
-    const worktreesDir = dirname(repoRoot)
-    const worktreesDirName = basename(worktreesDir)
-    if (worktreesDirName.endsWith('-worktrees')) {
-      mainRepoName = worktreesDirName.replace('-worktrees', '')
-      mainRepoPath = join(dirname(worktreesDir), mainRepoName)
-      worktreesPath = worktreesDir
+  if (isWorktree) {
+    // We're in a worktree - find main repo from git dir
+    // gitDir will be like /path/to/repo/.git/.worktrees/branch-name or /path/to/repo/.git/worktrees/branch-name
+    const match = gitDir.match(/(.+)\/\.git\/\.?worktrees\//)
+    if (match) {
+      mainRepoPath = match[1]
+      mainRepoName = basename(mainRepoPath)
+      worktreesPath = join(mainRepoPath, '.git', '.worktrees')
     } else {
-      throw new Error('Cannot determine main repo from worktree')
+      // Legacy: sibling -worktrees folder
+      const worktreesDir = dirname(repoRoot)
+      const worktreesDirName = basename(worktreesDir)
+      if (worktreesDirName.endsWith('-worktrees')) {
+        mainRepoName = worktreesDirName.replace('-worktrees', '')
+        mainRepoPath = join(dirname(worktreesDir), mainRepoName)
+        worktreesPath = worktreesDir
+      } else {
+        throw new Error('Cannot determine main repo from worktree')
+      }
     }
   } else {
     mainRepoName = repoName
     mainRepoPath = repoRoot
-    worktreesPath = join(parentDir, `${repoName}-worktrees`)
+    worktreesPath = join(repoRoot, '.git', '.worktrees')
   }
 
   let owner: string
@@ -87,15 +96,5 @@ export async function getContext(): Promise<Context> {
   const envPath = join(mainRepoPath, '.env')
   const hasEnv = existsSync(envPath)
 
-  return {
-    repoRoot,
-    mainRepoPath,
-    mainRepoName,
-    worktreesPath,
-    owner,
-    name,
-    defaultBranch,
-    envPath: hasEnv ? envPath : null,
-    cwd: process.cwd(),
-  }
+  return { repoRoot, mainRepoPath, mainRepoName, worktreesPath, owner, name, defaultBranch, envPath: hasEnv ? envPath : null, cwd: process.cwd() }
 }

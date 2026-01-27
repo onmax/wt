@@ -1,0 +1,228 @@
+import { execSync, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, copyFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { consola } from 'consola'
+import * as p from '@clack/prompts'
+import type { Context } from './context.js'
+
+function exec(cmd: string, opts: { cwd?: string } = {}): string {
+  return execSync(cmd, { encoding: 'utf8', ...opts }).trim()
+}
+
+function execSafe(cmd: string, opts: { cwd?: string } = {}): string | null {
+  try { return exec(cmd, opts) } catch { return null }
+}
+
+function slugify(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40).replace(/-$/g, '')
+}
+
+function getGitUser(): string | null {
+  return execSafe('gh api user --jq .login')
+}
+
+function ensureFork(owner: string, name: string, cwd: string): string {
+  const user = getGitUser()
+  if (!user) throw new Error('Not logged in to gh')
+
+  const forkExists = execSafe(`gh repo view ${user}/${name} --json name`) !== null
+  if (!forkExists) {
+    consola.start('Creating fork...')
+    exec(`gh repo fork ${owner}/${name} --clone=false`)
+  }
+
+  const remotes = exec('git remote -v', { cwd })
+  if (!remotes.includes('fork')) {
+    exec(`git remote add fork https://github.com/${user}/${name}.git`, { cwd })
+  }
+
+  return user
+}
+
+interface Issue { number: number, title: string }
+interface PR { number: number, title: string, headRefName: string }
+
+function fetchIssues(ctx: Context): Issue[] {
+  const json = exec(`gh issue list --repo ${ctx.owner}/${ctx.name} --state open --limit 20 --json number,title`)
+  return JSON.parse(json)
+}
+
+function fetchPRs(ctx: Context): PR[] {
+  const json = exec(`gh pr list --repo ${ctx.owner}/${ctx.name} --state open --limit 50 --json number,title,headRefName`)
+  return JSON.parse(json)
+}
+
+// Detect if #123 is an issue or PR
+function detectRefType(ctx: Context, num: number): { type: 'issue' | 'pr', data: Issue | PR } | null {
+  // Try PR first
+  const prJson = execSafe(`gh pr view ${num} --repo ${ctx.owner}/${ctx.name} --json number,title,headRefName`)
+  if (prJson) {
+    return { type: 'pr', data: JSON.parse(prJson) }
+  }
+  // Try issue
+  const issueJson = execSafe(`gh issue view ${num} --repo ${ctx.owner}/${ctx.name} --json number,title`)
+  if (issueJson) {
+    return { type: 'issue', data: JSON.parse(issueJson) }
+  }
+  return null
+}
+
+async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?: string, trackRemote?: boolean, createPr?: boolean, issueUrl?: string } = {}): Promise<void> {
+  const { mainRepoPath, worktreesPath, owner, name, defaultBranch, envPath } = ctx
+  const { baseBranch = defaultBranch, trackRemote = false, createPr = false } = opts
+  const user = getGitUser()
+
+  if (!existsSync(worktreesPath)) {
+    mkdirSync(worktreesPath, { recursive: true })
+    consola.info(`Created: ${worktreesPath}`)
+  }
+
+  const worktreePath = join(worktreesPath, branch)
+
+  if (existsSync(worktreePath)) {
+    consola.warn(`Already exists: ${worktreePath}`)
+    spawnSync(process.env.SHELL || 'zsh', [], { cwd: worktreePath, stdio: 'inherit' })
+    return
+  }
+
+  if (trackRemote) {
+    // Clone existing remote branch
+    consola.start(`Fetching: ${branch}`)
+    exec(`git fetch origin ${branch}`, { cwd: mainRepoPath })
+
+    const branchExists = execSafe(`git rev-parse --verify ${branch}`, { cwd: mainRepoPath }) !== null
+    if (branchExists) {
+      exec(`git worktree add "${worktreePath}" ${branch}`, { cwd: mainRepoPath })
+    } else {
+      exec(`git worktree add --track -b ${branch} "${worktreePath}" origin/${branch}`, { cwd: mainRepoPath })
+    }
+  } else {
+    // Create new branch from base
+    consola.start(`Fetching ${baseBranch}...`)
+    exec(`git fetch origin ${baseBranch}`, { cwd: mainRepoPath })
+
+    consola.start(`Creating: ${branch}`)
+    exec(`git worktree add -b ${branch} "${worktreePath}" origin/${baseBranch}`, { cwd: mainRepoPath })
+
+    let useFork = false
+    consola.start('Pushing branch...')
+    const pushResult = execSafe(`git push -u origin ${branch}`, { cwd: worktreePath })
+    if (pushResult === null) {
+      consola.warn('No push access, using fork...')
+      ensureFork(owner, name, worktreePath)
+      exec(`git push -u fork ${branch}`, { cwd: worktreePath })
+      useFork = true
+    }
+
+    if (createPr) {
+      consola.start('Creating draft PR...')
+      try {
+        const head = useFork ? `${user}:${branch}` : branch
+        const prUrl = exec(`gh pr create --draft --title "${branch}" --body "" --head ${head} --repo ${owner}/${name}`, { cwd: worktreePath })
+        consola.success(`Draft PR: ${prUrl}`)
+      } catch {
+        consola.warn('Failed to create PR')
+      }
+    }
+  }
+
+  if (envPath) {
+    const destEnv = join(worktreePath, '.env')
+    copyFileSync(envPath, destEnv)
+    consola.success('Copied .env')
+  }
+
+  consola.success(`Ready: ${worktreePath}`)
+  spawnSync(process.env.SHELL || 'zsh', [], { cwd: worktreePath, stdio: 'inherit' })
+}
+
+export async function add(ref: string | undefined, ctx: Context, flags: { pr?: boolean } = {}): Promise<void> {
+  // No ref = interactive mode
+  if (!ref) {
+    const source = await p.select({
+      message: 'Create from:',
+      options: [
+        { value: 'issue', label: 'Issue', hint: 'open issue' },
+        { value: 'pr', label: 'PR', hint: 'clone existing PR' },
+        { value: 'custom', label: 'Custom', hint: 'new branch' },
+      ],
+    })
+    if (p.isCancel(source)) return process.exit(0)
+
+    if (source === 'issue') {
+      const spinner = p.spinner()
+      spinner.start('Fetching issues...')
+      const issues = fetchIssues(ctx)
+      spinner.stop()
+      if (!issues.length) { consola.warn('No open issues'); return }
+      const issue = await p.select({
+        message: 'Select issue:',
+        options: issues.map(i => ({ value: i, label: `#${i.number} ${i.title}` })),
+      })
+      if (p.isCancel(issue)) return process.exit(0)
+      const branch = `${issue.number}-${slugify(issue.title)}`
+      const issueUrl = `https://github.com/${ctx.owner}/${ctx.name}/issues/${issue.number}`
+      await createWorktree(ctx, branch, { createPr: flags.pr, issueUrl })
+      return
+    }
+
+    if (source === 'pr') {
+      const spinner = p.spinner()
+      spinner.start('Fetching PRs...')
+      const prs = fetchPRs(ctx)
+      spinner.stop()
+      if (!prs.length) { consola.warn('No open PRs'); return }
+
+      const choices = prs.map(pr => `#${pr.number}\t${pr.headRefName}\t${pr.title}`)
+      const fzfInput = choices.join('\n')
+      const result = spawnSync('fzf', ['--header=Select PR', '--delimiter=\t', '--with-nth=1,3'], {
+        input: fzfInput, encoding: 'utf8', stdio: ['pipe', 'pipe', 'inherit'],
+      })
+      if (result.status !== 0 || !result.stdout?.trim()) { consola.info('Cancelled'); return }
+      const [, branch] = result.stdout.trim().split('\t')
+      await createWorktree(ctx, branch, { trackRemote: true })
+      return
+    }
+
+    // Custom branch
+    const branch = await p.text({ message: 'Branch name:', placeholder: 'fix-something' })
+    if (p.isCancel(branch)) return process.exit(0)
+    const createPr = await p.confirm({ message: 'Create draft PR?', initialValue: false })
+    if (p.isCancel(createPr)) return process.exit(0)
+    await createWorktree(ctx, branch, { createPr })
+    return
+  }
+
+  // #123 = auto-detect issue or PR
+  if (ref.startsWith('#')) {
+    const num = Number.parseInt(ref.slice(1), 10)
+    if (Number.isNaN(num)) { consola.error('Invalid number'); process.exit(1) }
+
+    consola.start(`Looking up #${num}...`)
+    const detected = detectRefType(ctx, num)
+    if (!detected) { consola.error(`#${num} not found`); process.exit(1) }
+
+    if (detected.type === 'pr') {
+      const pr = detected.data as PR
+      consola.info(`Found PR: ${pr.title}`)
+      await createWorktree(ctx, pr.headRefName, { trackRemote: true })
+    } else {
+      const issue = detected.data as Issue
+      consola.info(`Found issue: ${issue.title}`)
+      const branch = `${issue.number}-${slugify(issue.title)}`
+      const issueUrl = `https://github.com/${ctx.owner}/${ctx.name}/issues/${issue.number}`
+      await createWorktree(ctx, branch, { createPr: flags.pr, issueUrl })
+    }
+    return
+  }
+
+  // @branch = clone remote branch
+  if (ref.startsWith('@')) {
+    const branch = ref.slice(1)
+    await createWorktree(ctx, branch, { trackRemote: true })
+    return
+  }
+
+  // Plain branch name = create new branch
+  await createWorktree(ctx, ref, { createPr: flags.pr })
+}
