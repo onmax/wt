@@ -9,6 +9,7 @@ import { clone, cloneWorktree } from './clone.js'
 import { list } from './list.js'
 import { sync } from './sync.js'
 import { clean } from './clean.js'
+import { open } from './open.js'
 
 const [,, cmd, ...args] = process.argv
 const flags = args.filter(a => a.startsWith('--'))
@@ -45,6 +46,7 @@ async function interactive(ctx: Context): Promise<void> {
       { value: 'clone', label: 'Clone', hint: 'existing PR as worktree' },
       { value: 'list', label: 'List', hint: 'all worktrees with PR status' },
       { value: 'sync', label: 'Sync', hint: 'pull latest from base branch' },
+      { value: 'open', label: 'Open', hint: 'open existing worktree + plan mode' },
       { value: 'clean', label: 'Clean', hint: 'verify CI + squash merge' },
     ],
   })
@@ -106,6 +108,10 @@ async function interactive(ctx: Context): Promise<void> {
     if (p.isCancel(createPr)) return process.exit(0)
 
     await create(branch, { ...ctx, createPr, issueUrl })
+  } else if (command === 'open') {
+    await open(ctx)
+    p.outro('Done!')
+    return
   } else if (command === 'clone') {
     await clone(ctx)
     p.outro('Done!')
@@ -132,6 +138,7 @@ Commands:
   wt                           Interactive mode
   wt create <branch> [--pr]    Create worktree + branch (--pr: also create draft PR)
   wt clone                     Pick open PR with fzf, clone as worktree
+  wt open                      Pick local worktree, cd + Claude plan mode
   wt list                      Show all worktrees with PR status
   wt sync                      Pull latest from base branch
   wt clean [pr]                Spawn Claude to verify CI + squash
@@ -156,6 +163,7 @@ Commands:
     const commands: Record<string, () => Promise<void>> = {
       create: () => create(positional[0], { ...ctx, createPr: flags.includes('--pr') }),
       clone: () => clone(ctx),
+      open: () => open(ctx),
       list: () => list(ctx),
       sync: () => sync(ctx),
       clean: () => clean(positional[0], ctx),
