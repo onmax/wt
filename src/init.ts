@@ -49,6 +49,12 @@ export async function init(url: string, name?: string): Promise<void> {
     consola.success('Copied .env')
   }
 
+  // Install dependencies if package.json exists
+  if (existsSync(join(mainPath, 'package.json'))) {
+    consola.start('Installing dependencies...')
+    spawnSync('ni', [], { cwd: mainPath, stdio: 'inherit' })
+  }
+
   consola.success(`Ready: ${mainPath}`)
   spawnSync(process.env.SHELL || 'zsh', [], { cwd: mainPath, stdio: 'inherit' })
 }

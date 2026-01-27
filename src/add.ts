@@ -127,6 +127,12 @@ async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?:
     consola.success('Copied .env')
   }
 
+  // Install dependencies if package.json exists
+  if (existsSync(join(worktreePath, 'package.json'))) {
+    consola.start('Installing dependencies...')
+    spawnSync('ni', [], { cwd: worktreePath, stdio: 'inherit' })
+  }
+
   consola.success(`Ready: ${worktreePath}`)
   spawnSync(process.env.SHELL || 'zsh', [], { cwd: worktreePath, stdio: 'inherit' })
 }
