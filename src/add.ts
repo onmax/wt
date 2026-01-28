@@ -62,12 +62,12 @@ interface Issue { number: number, title: string }
 interface PR { number: number, title: string, headRefName: string }
 
 function fetchIssues(ctx: Context): Issue[] {
-  const json = exec(`gh issue list --repo ${ctx.owner}/${ctx.name} --state open --limit 20 --json number,title`)
+  const json = exec(`gh issue list --repo ${ctx.owner}/${ctx.name} --state open --limit 100 --json number,title`)
   return JSON.parse(json)
 }
 
 function fetchPRs(ctx: Context): PR[] {
-  const json = exec(`gh pr list --repo ${ctx.owner}/${ctx.name} --state open --limit 50 --json number,title,headRefName`)
+  const json = exec(`gh pr list --repo ${ctx.owner}/${ctx.name} --state open --limit 100 --json number,title,headRefName`)
   return JSON.parse(json)
 }
 
@@ -175,9 +175,11 @@ export async function add(ref: string | undefined, ctx: Context, flags: { pr?: b
       const issues = fetchIssues(ctx)
       spinner.stop()
       if (!issues.length) { consola.warn('No open issues'); return }
-      const issue = await p.select({
+      const issue = await p.autocomplete({
         message: 'Select issue:',
         options: issues.map(i => ({ value: i, label: `#${i.number} ${i.title}` })),
+        maxItems: 10,
+        placeholder: 'Type to filter...',
       })
       if (p.isCancel(issue)) return process.exit(0)
       const branch = `${issue.number}-${slugify(issue.title)}`
@@ -193,9 +195,11 @@ export async function add(ref: string | undefined, ctx: Context, flags: { pr?: b
       spinner.stop()
       if (!prs.length) { consola.warn('No open PRs'); return }
 
-      const pr = await p.select({
+      const pr = await p.autocomplete({
         message: 'Select PR:',
         options: prs.map(pr => ({ value: pr, label: `#${pr.number} ${pr.title}`, hint: pr.headRefName })),
+        maxItems: 10,
+        placeholder: 'Type to filter...',
       })
       if (p.isCancel(pr)) return process.exit(0)
       await createWorktree(ctx, pr.headRefName, { trackRemote: true })
