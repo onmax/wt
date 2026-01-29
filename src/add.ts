@@ -159,60 +159,54 @@ async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?:
 export async function add(ref: string | undefined, ctx: Context, flags: { pr?: boolean } = {}): Promise<void> {
   // No ref = interactive mode
   if (!ref) {
-    const source = await p.select({
-      message: 'Create from:',
-      options: [
-        { value: 'issue', label: 'Issue', hint: 'open issue' },
-        { value: 'pr', label: 'PR', hint: 'clone existing PR' },
-        { value: 'custom', label: 'Custom', hint: 'new branch' },
-      ],
-    })
-    if (p.isCancel(source)) return process.exit(0)
+    const spinner = p.spinner()
+    spinner.start('Fetching issues and PRs...')
 
-    if (source === 'issue') {
-      const spinner = p.spinner()
-      spinner.start('Fetching issues...')
-      const issues = fetchIssues(ctx)
-      spinner.stop()
-      if (!issues.length) { consola.warn('No open issues'); return }
-      const issue = await p.autocomplete({
-        message: 'Select issue:',
-        options: issues.map(i => ({ value: i, label: `#${i.number} ${i.title}` })),
-        maxItems: 10,
-        placeholder: 'Type to filter...',
-      })
-      if (p.isCancel(issue)) return process.exit(0)
+    let issues: Issue[] = []
+    let prs: PR[] = []
+    try { issues = fetchIssues(ctx) } catch {}
+    try { prs = fetchPRs(ctx) } catch {}
+
+    spinner.stop()
+
+    type Item = { type: 'custom' } | { type: 'issue', data: Issue } | { type: 'pr', data: PR }
+
+    const options: { value: Item, label: string, hint?: string }[] = [
+      { value: { type: 'custom' }, label: '+ Custom branch', hint: 'create new' },
+      ...issues.map(i => ({ value: { type: 'issue' as const, data: i }, label: `[Issue] #${i.number} ${i.title}` })),
+      ...prs.map(pr => ({ value: { type: 'pr' as const, data: pr }, label: `[PR] #${pr.number} ${pr.title}`, hint: pr.headRefName })),
+    ]
+
+    const selected = await p.autocomplete({
+      message: 'Select issue, PR, or create custom:',
+      options,
+      maxItems: 15,
+      placeholder: 'Type to filter...',
+    })
+    if (p.isCancel(selected)) return process.exit(0)
+
+    if (selected.type === 'custom') {
+      const branch = await p.text({ message: 'Branch name:', placeholder: 'fix-something' })
+      if (p.isCancel(branch)) return process.exit(0)
+      const createPr = await p.confirm({ message: 'Create draft PR?', initialValue: false })
+      if (p.isCancel(createPr)) return process.exit(0)
+      await createWorktree(ctx, branch, { createPr })
+      return
+    }
+
+    if (selected.type === 'issue') {
+      const issue = selected.data
       const branch = `${issue.number}-${slugify(issue.title)}`
       const issueUrl = `https://github.com/${ctx.owner}/${ctx.name}/issues/${issue.number}`
       await createWorktree(ctx, branch, { createPr: flags.pr, issueUrl })
       return
     }
 
-    if (source === 'pr') {
-      const spinner = p.spinner()
-      spinner.start('Fetching PRs...')
-      const prs = fetchPRs(ctx)
-      spinner.stop()
-      if (!prs.length) { consola.warn('No open PRs'); return }
-
-      const pr = await p.autocomplete({
-        message: 'Select PR:',
-        options: prs.map(pr => ({ value: pr, label: `#${pr.number} ${pr.title}`, hint: pr.headRefName })),
-        maxItems: 10,
-        placeholder: 'Type to filter...',
-      })
-      if (p.isCancel(pr)) return process.exit(0)
+    if (selected.type === 'pr') {
+      const pr = selected.data
       await createWorktree(ctx, pr.headRefName, { trackRemote: true })
       return
     }
-
-    // Custom branch
-    const branch = await p.text({ message: 'Branch name:', placeholder: 'fix-something' })
-    if (p.isCancel(branch)) return process.exit(0)
-    const createPr = await p.confirm({ message: 'Create draft PR?', initialValue: false })
-    if (p.isCancel(createPr)) return process.exit(0)
-    await createWorktree(ctx, branch, { createPr })
-    return
   }
 
   // #123 = auto-detect issue or PR
