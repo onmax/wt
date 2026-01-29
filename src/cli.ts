@@ -1,15 +1,14 @@
 #!/usr/bin/env node
+import type { Context } from './context.js'
 import { spawnSync } from 'node:child_process'
 import { consola } from 'consola'
-import * as p from '@clack/prompts'
-import type { Context } from './context.js'
+import { add } from './add.js'
+import { ci } from './ci.js'
 import { getContext } from './context.js'
 import { init } from './init.js'
-import { add } from './add.js'
 import { list, pickWorktree } from './list.js'
 import { rm } from './rm.js'
 import { sync } from './sync.js'
-import { ci } from './ci.js'
 
 const [,, cmd, ...args] = process.argv
 const flags = args.filter(a => a.startsWith('--'))
@@ -52,7 +51,8 @@ wt add examples:
   let ctx: Context
   try {
     ctx = await getContext()
-  } catch (err) {
+  }
+  catch (err) {
     consola.error((err as Error).message)
     process.exit(1)
   }
@@ -61,7 +61,8 @@ wt add examples:
     // No command = picker
     if (!cmd) {
       const wtPath = await pickWorktree(ctx)
-      if (wtPath === undefined) return // cancelled
+      if (wtPath === undefined)
+        return // cancelled
       if (wtPath === null) { // create new
         await add(undefined, ctx, {})
         return
@@ -86,7 +87,8 @@ wt add examples:
     }
 
     await commands[cmd]()
-  } catch (err) {
+  }
+  catch (err) {
     consola.error((err as Error).message)
     process.exit(1)
   }

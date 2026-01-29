@@ -21,13 +21,14 @@ function exec(cmd: string, opts?: { cwd?: string }): string {
 }
 
 function execSafe(cmd: string, opts?: { cwd?: string }): string | null {
-  try { return exec(cmd, opts) } catch { return null }
+  try { return exec(cmd, opts) }
+  catch { return null }
 }
 
 export async function getContext(): Promise<Context> {
-  let repoRoot: string
-  let worktreesPath: string
-  let mainRepoPath: string
+  let repoRoot: string | undefined
+  let worktreesPath: string | undefined
+  let mainRepoPath: string | undefined
 
   // First: check if cwd has repo.git (in container directory)
   const cwdBareGit = join(process.cwd(), 'repo.git')
@@ -38,7 +39,8 @@ export async function getContext(): Promise<Context> {
     if (!existsSync(repoRoot)) {
       throw new Error('Main worktree not found')
     }
-  } else {
+  }
+  else {
     // Second: try git rev-parse (we're in a worktree)
     const gitRoot = execSafe('git rev-parse --show-toplevel')
     if (gitRoot) {
@@ -49,10 +51,12 @@ export async function getContext(): Promise<Context> {
         repoRoot = gitRoot
         mainRepoPath = bareGitPath
         worktreesPath = parentDir
-      } else {
+      }
+      else {
         throw new Error('Not a wt repo. Use `wt init <url>` to create one.')
       }
-    } else {
+    }
+    else {
       // Third: walk up looking for repo.git (in container but not worktree)
       let dir = process.cwd()
       let found = false
@@ -75,6 +79,10 @@ export async function getContext(): Promise<Context> {
       }
     }
   }
+
+  if (!repoRoot || !worktreesPath || !mainRepoPath) {
+    throw new Error('Failed to determine repository paths')
+  }
   const mainRepoName = basename(worktreesPath)
 
   let owner: string
@@ -86,7 +94,8 @@ export async function getContext(): Promise<Context> {
     owner = data.owner.login
     name = data.name
     defaultBranch = data.defaultBranchRef.name
-  } catch {
+  }
+  catch {
     throw new Error('Failed to get repo info from GitHub')
   }
 

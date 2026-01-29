@@ -1,6 +1,6 @@
 import { execSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, copyFileSync, writeFileSync } from 'node:fs'
-import { join, basename } from 'node:path'
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { consola } from 'consola'
 import { globSync } from 'tinyglobby'
 

@@ -6,4 +6,6 @@ export default defineConfig({
   dts: true,
   clean: true,
   shims: true,
+  exports: true,
+  attw: { profile: 'esm-only' },
 })

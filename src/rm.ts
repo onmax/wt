@@ -1,7 +1,7 @@
-import { execSync, spawnSync } from 'node:child_process'
-import { consola } from 'consola'
-import * as p from '@clack/prompts'
 import type { Context } from './context.js'
+import { execSync, spawnSync } from 'node:child_process'
+import * as p from '@clack/prompts'
+import { consola } from 'consola'
 import { getWorktrees } from './list.js'
 
 function exec(cmd: string, opts: { cwd?: string } = {}): string {
@@ -25,11 +25,13 @@ export async function rm(name: string | undefined, ctx: Context): Promise<void> 
       message: 'Remove worktree:',
       options: wts.map(w => ({ value: w, label: w.branch, hint: w.path })),
     })
-    if (p.isCancel(selected)) return process.exit(0)
+    if (p.isCancel(selected))
+      return process.exit(0)
 
     branch = selected.branch
     wtPath = selected.path
-  } else {
+  }
+  else {
     const wts = getWorktrees(ctx)
     const found = wts.find(w => w.branch === name || w.path.endsWith(`/${name}`))
     if (!found) {
@@ -41,7 +43,8 @@ export async function rm(name: string | undefined, ctx: Context): Promise<void> 
   }
 
   const confirmed = await p.confirm({ message: `Remove ${branch}?` })
-  if (!confirmed || p.isCancel(confirmed)) return process.exit(0)
+  if (!confirmed || p.isCancel(confirmed))
+    return process.exit(0)
 
   consola.start(`Removing: ${branch}`)
   exec(`git worktree remove "${wtPath}" --force`, { cwd: mainRepoPath })

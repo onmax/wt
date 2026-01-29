@@ -1,6 +1,6 @@
+import type { Context } from './context.js'
 import { execSync } from 'node:child_process'
 import { consola } from 'consola'
-import type { Context } from './context.js'
 
 function exec(cmd: string, opts: { cwd?: string } = {}): void {
   execSync(cmd, { encoding: 'utf8', stdio: 'inherit', ...opts })

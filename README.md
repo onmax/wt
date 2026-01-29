@@ -25,15 +25,15 @@ The CLI guides you through creating worktrees from issues, PRs, or custom branch
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `wt` | fzf picker → cd into worktree |
-| `wt add [ref]` | Smart add (see examples below) |
+| Command             | Description                         |
+| ------------------- | ----------------------------------- |
+| `wt`                | fzf picker → cd into worktree       |
+| `wt add [ref]`      | Smart add (see examples below)      |
 | `wt add [ref] --pr` | Create worktree and open a draft PR |
-| `wt ls` | List worktrees with PR/CI status |
-| `wt rm [name]` | Remove worktree |
-| `wt sync` | Rebase on base branch |
-| `wt ci` | Show CI status for current PR |
+| `wt ls`             | List worktrees with PR/CI status    |
+| `wt rm [name]`      | Remove worktree                     |
+| `wt sync`           | Rebase on base branch               |
+| `wt ci`             | Show CI status for current PR       |
 
 ### Add Examples
 
@@ -61,6 +61,7 @@ The picker loads the 100 most recent open issues and PRs for fast initial displa
 When you search by number, the CLI performs a live lookup if the item isn't already cached. This enables you to access any issue or PR while maintaining fast initial load times.
 
 When creating from an issue, the CLI:
+
 - Creates a worktree at `../{repo}-worktrees/{branch}`
 - Copies `.env` from the main repo if present
 - Pushes to your fork if you lack write access

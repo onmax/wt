@@ -1,13 +1,14 @@
+import type { Context } from './context.js'
 import { execSync } from 'node:child_process'
 import { consola } from 'consola'
-import type { Context } from './context.js'
 
 function exec(cmd: string, opts: { cwd?: string } = {}): string {
   return execSync(cmd, { encoding: 'utf8', ...opts }).trim()
 }
 
 function execSafe(cmd: string, opts: { cwd?: string } = {}): string | null {
-  try { return exec(cmd, opts) } catch { return null }
+  try { return exec(cmd, opts) }
+  catch { return null }
 }
 
 export async function ci(ctx: Context): Promise<void> {

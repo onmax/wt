@@ -1,17 +1,18 @@
-import { execSync, spawnSync } from 'node:child_process'
-import { existsSync, copyFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { consola } from 'consola'
-import * as p from '@clack/prompts'
-import { globSync } from 'tinyglobby'
 import type { Context } from './context.js'
+import { execSync, spawnSync } from 'node:child_process'
+import { copyFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
+import * as p from '@clack/prompts'
+import { consola } from 'consola'
+import { globSync } from 'tinyglobby'
 
 function exec(cmd: string, opts: { cwd?: string } = {}): string {
   return execSync(cmd, { encoding: 'utf8', ...opts }).trim()
 }
 
 function execSafe(cmd: string, opts: { cwd?: string } = {}): string | null {
-  try { return exec(cmd, opts) } catch { return null }
+  try { return execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], ...opts }).trim() }
+  catch { return null }
 }
 
 function slugify(text: string): string {
@@ -42,7 +43,8 @@ function getGitUser(): string | null {
 
 function ensureFork(owner: string, name: string, cwd: string): string {
   const user = getGitUser()
-  if (!user) throw new Error('Not logged in to gh')
+  if (!user)
+    throw new Error('Not logged in to gh')
 
   const forkExists = execSafe(`gh repo view ${user}/${name} --json name`) !== null
   if (!forkExists) {
@@ -108,10 +110,12 @@ async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?:
     const branchExists = execSafe(`git rev-parse --verify ${branch}`, { cwd: mainRepoPath }) !== null
     if (branchExists) {
       exec(`git worktree add ../${flatBranch} ${branch}`, { cwd: mainRepoPath })
-    } else {
+    }
+    else {
       exec(`git worktree add --track -b ${branch} ../${flatBranch} origin/${branch}`, { cwd: mainRepoPath })
     }
-  } else {
+  }
+  else {
     // Create new branch from base
     consola.start(`Fetching ${baseBranch}...`)
     exec(`git fetch origin ${baseBranch}`, { cwd: mainRepoPath })
@@ -136,7 +140,8 @@ async function createWorktree(ctx: Context, branch: string, opts: { baseBranch?:
         const head = useFork ? `${user}:${branch}` : branch
         const prUrl = exec(`gh pr create --draft --title "${branch}" --body "" --head ${head} --repo ${owner}/${name}`, { cwd: worktreePath })
         consola.success(`Draft PR: ${prUrl}`)
-      } catch {
+      }
+      catch {
         consola.warn('Failed to create PR')
       }
     }
@@ -164,12 +169,14 @@ export async function add(ref: string | undefined, ctx: Context, flags: { pr?: b
 
     let issues: Issue[] = []
     let prs: PR[] = []
-    try { issues = fetchIssues(ctx) } catch {}
-    try { prs = fetchPRs(ctx) } catch {}
+    try { issues = fetchIssues(ctx) }
+    catch {}
+    try { prs = fetchPRs(ctx) }
+    catch {}
 
     spinner.stop()
 
-    type Item = { type: 'custom' } | { type: 'issue', data: Issue } | { type: 'pr', data: PR }
+    type Item = { type: 'custom', number?: number } | { type: 'issue', data: Issue } | { type: 'pr', data: PR }
 
     // Cache fetched data
     const cachedIssues = issues
@@ -183,8 +190,8 @@ export async function add(ref: string | undefined, ctx: Context, flags: { pr?: b
         const search = this.userInput.trim()
 
         // Base options
-        const baseOptions: { value: Item, label: string, hint?: string }[] = [
-          { value: { type: 'custom' }, label: '+ Custom branch', hint: 'create new' },
+        const baseOptions = [
+          { value: { type: 'custom' as const }, label: '+ Custom branch', hint: 'create new' },
         ]
 
         // Check if searching for specific number
@@ -193,45 +200,64 @@ export async function add(ref: string | undefined, ctx: Context, flags: { pr?: b
           const num = Number(numMatch[1])
 
           // Check if already in cache
-          const inCache = cachedIssues.some(i => i.number === num) ||
-                          cachedPRs.some(p => p.number === num)
+          const inCache = cachedIssues.some(i => i.number === num)
+            || cachedPRs.some(p => p.number === num)
 
           if (!inCache) {
-            // Live search using detectRefType
-            const found = detectRefType(ctx, num)
-            if (found) {
-              if (found.type === 'pr') {
-                const pr = found.data as PR
-                return [
-                  baseOptions[0],
-                  { value: { type: 'pr', data: pr }, label: `[PR] #${pr.number} ${pr.title}`, hint: pr.headRefName }
-                ]
-              } else {
-                const issue = found.data as Issue
-                return [
-                  baseOptions[0],
-                  { value: { type: 'issue', data: issue }, label: `[Issue] #${issue.number} ${issue.title}` }
-                ]
-              }
-            }
+            baseOptions.push({
+              value: { type: 'custom', number: num } as any,
+              label: `Search #${num}...`,
+              hint: 'press enter',
+            })
           }
         }
 
-        // Return cached results
+        // Return cached results with filtering
         return [
           ...baseOptions,
-          ...cachedIssues.map(i => ({ value: { type: 'issue' as const, data: i }, label: `[Issue] #${i.number} ${i.title}` })),
-          ...cachedPRs.map(pr => ({ value: { type: 'pr' as const, data: pr }, label: `[PR] #${pr.number} ${pr.title}`, hint: pr.headRefName })),
+          ...cachedIssues
+            .filter(i => !search || i.title.toLowerCase().includes(search.toLowerCase()) || `${i.number}`.includes(search))
+            .map(i => ({ value: { type: 'issue' as const, data: i }, label: `[Issue] #${i.number} ${i.title}` })),
+          ...cachedPRs
+            .filter(pr => !search || pr.title.toLowerCase().includes(search.toLowerCase()) || `${pr.number}`.includes(search))
+            .map(pr => ({ value: { type: 'pr' as const, data: pr }, label: `[PR] #${pr.number} ${pr.title}`, hint: pr.headRefName })),
         ]
-      }
-    })
-    if (p.isCancel(selected)) return process.exit(0)
+      },
+    }) as Item
+    if (p.isCancel(selected))
+      return process.exit(0)
 
     if (selected.type === 'custom') {
+      if (selected.number) {
+        // Perform lookup for custom search
+        consola.start(`Looking up #${selected.number}...`)
+        const found = detectRefType(ctx, selected.number)
+        if (!found) {
+          consola.error(`#${selected.number} not found`)
+          return process.exit(1)
+        }
+
+        if (found.type === 'pr') {
+          const pr = found.data as PR
+          consola.info(`Found PR: ${pr.title}`)
+          await createWorktree(ctx, pr.headRefName, { trackRemote: true })
+        }
+        else {
+          const issue = found.data as Issue
+          consola.info(`Found issue: ${issue.title}`)
+          const branch = `${issue.number}-${slugify(issue.title)}`
+          const issueUrl = `https://github.com/${ctx.owner}/${ctx.name}/issues/${issue.number}`
+          await createWorktree(ctx, branch, { createPr: flags.pr, issueUrl })
+        }
+        return
+      }
+
       const branch = await p.text({ message: 'Branch name:', placeholder: 'fix-something' })
-      if (p.isCancel(branch)) return process.exit(0)
+      if (p.isCancel(branch))
+        return process.exit(0)
       const createPr = await p.confirm({ message: 'Create draft PR?', initialValue: false })
-      if (p.isCancel(createPr)) return process.exit(0)
+      if (p.isCancel(createPr))
+        return process.exit(0)
       await createWorktree(ctx, branch, { createPr })
       return
     }
@@ -251,6 +277,11 @@ export async function add(ref: string | undefined, ctx: Context, flags: { pr?: b
     }
   }
 
+  if (!ref) {
+    consola.error('No branch reference provided')
+    process.exit(1)
+  }
+
   // #123 = auto-detect issue or PR
   if (ref.startsWith('#')) {
     const num = Number.parseInt(ref.slice(1), 10)
@@ -264,7 +295,8 @@ export async function add(ref: string | undefined, ctx: Context, flags: { pr?: b
       const pr = detected.data as PR
       consola.info(`Found PR: ${pr.title}`)
       await createWorktree(ctx, pr.headRefName, { trackRemote: true })
-    } else {
+    }
+    else {
       const issue = detected.data as Issue
       consola.info(`Found issue: ${issue.title}`)
       const branch = `${issue.number}-${slugify(issue.title)}`

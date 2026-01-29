@@ -1,31 +1,19 @@
 {
   "name": "@onmax/wt",
-  "packageManager": "pnpm@10.0.0",
-  "version": "0.1.0",
-  "description": "Git worktrees CLI with GitHub integration",
   "type": "module",
-  "bin": {
-    "wt": "./dist/cli.js"
-  },
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "pnpm build"
-  },
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.0.0",
+  "description": "Git worktrees CLI with GitHub integration",
+  "author": "Max <maximogarciamtnez@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/onmax/wt#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/onmax/wt.git"
   },
-  "homepage": "https://github.com/onmax/wt#readme",
   "bugs": {
     "url": "https://github.com/onmax/wt/issues"
   },
-  "author": "Max <maximogarciamtnez@gmail.com>",
-  "license": "MIT",
   "keywords": [
     "git",
     "worktrees",
@@ -33,8 +21,37 @@
     "github",
     "workflow"
   ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    }
+  },
+  "main": "./dist/cli.js",
+  "module": "./dist/cli.js",
+  "types": "./dist/cli.d.ts",
+  "bin": {
+    "wt": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint": "eslint .",
+    "lf": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "tp": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "release": "changelogen --release && bumpp --commit --tag --push",
+    "prepare": "simple-git-hooks",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@clack/prompts": "^1.0.0",
@@ -42,8 +59,24 @@
     "tinyglobby": "^0.2.12"
   },
   "devDependencies": {
+    "@antfu/eslint-config": "^7.2.0",
+    "@arethetypeswrong/cli": "^0.18.2",
     "@types/node": "^22.0.0",
+    "bumpp": "^10.4.0",
+    "changelogen": "^0.6.2",
+    "eslint": "^9.39.2",
+    "eslint-plugin-format": "^1.3.1",
+    "lint-staged": "^16.2.7",
+    "publint": "^0.3.17",
+    "simple-git-hooks": "^2.13.1",
     "tsdown": "^0.11.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged"
+  },
+  "lint-staged": {
+    "*.{ts,json,md,yml}": "eslint --fix"
   }
 }
