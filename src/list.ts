@@ -30,16 +30,20 @@ export function getWorktrees(ctx: Context): Worktree[] {
   return worktrees
 }
 
-// Interactive picker returning selected worktree path
+// Interactive picker returning selected worktree path, or null for "create new"
 export async function pickWorktree(ctx: Context): Promise<string | null> {
   const wts = getWorktrees(ctx)
-  if (wts.length === 0) return null
+
+  const options = [
+    { value: null, label: '+ Create new', hint: 'new worktree' },
+    ...wts.map(w => ({ value: w.path, label: w.branch })),
+  ]
 
   const selected = await p.select({
     message: 'Select worktree:',
-    options: wts.map(w => ({ value: w.path, label: w.branch })),
+    options,
   })
-  if (p.isCancel(selected)) return null
+  if (p.isCancel(selected)) return undefined as any
   return selected
 }
 

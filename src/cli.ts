@@ -61,12 +61,9 @@ wt add examples:
     // No command = picker
     if (!cmd) {
       const wtPath = await pickWorktree(ctx)
-      if (!wtPath) {
-        consola.info('No worktrees found')
-        const create = await p.confirm({ message: 'Create one?', initialValue: true })
-        if (!p.isCancel(create) && create) {
-          await add(undefined, ctx, {})
-        }
+      if (wtPath === undefined) return // cancelled
+      if (wtPath === null) { // create new
+        await add(undefined, ctx, {})
         return
       }
       spawnSync(process.env.SHELL || 'zsh', [], { cwd: wtPath, stdio: 'inherit' })
