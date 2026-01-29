@@ -1,6 +1,6 @@
 # wt
 
-Git worktrees CLI with GitHub integration and Claude Code support.
+Git worktrees CLI with GitHub integration.
 
 ## Installation
 
@@ -11,7 +11,6 @@ npm install -g @onmax/wt
 ## Prerequisites
 
 - [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
-- [Claude Code](https://claude.ai/code) (optional, for issue investigation)
 - Git repository with a GitHub remote
 
 ## Usage
@@ -58,16 +57,29 @@ When creating from an issue, the CLI:
 - Creates a worktree at `../{repo}-worktrees/{branch}`
 - Copies `.env` from the main repo if present
 - Pushes to your fork if you lack write access
-- Launches Claude Code in plan mode to investigate the issue
+- Installs dependencies with `ni`
+- Spawns a shell in the new worktree
 
 ## Configuration
 
-Custom worktree paths can be configured per repository in `~/.config/wt/config.json`:
+### Custom Worktree Paths
+
+Configure per repository in `~/.config/wt/config.json`:
 
 ```json
 {
   "nuxt-hub/core": "~/nuxt/hub-worktrees",
   "unjs/nitro": "~/nuxt/nitro-worktrees"
+}
+```
+
+### File Propagation
+
+Create `.wt.json` in repo root to auto-copy files to new worktrees:
+
+```json
+{
+  "propagate": [".env", ".env.local", "config.local.json"]
 }
 ```
 
