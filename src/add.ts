@@ -171,17 +171,59 @@ export async function add(ref: string | undefined, ctx: Context, flags: { pr?: b
 
     type Item = { type: 'custom' } | { type: 'issue', data: Issue } | { type: 'pr', data: PR }
 
-    const options: { value: Item, label: string, hint?: string }[] = [
-      { value: { type: 'custom' }, label: '+ Custom branch', hint: 'create new' },
-      ...issues.map(i => ({ value: { type: 'issue' as const, data: i }, label: `[Issue] #${i.number} ${i.title}` })),
-      ...prs.map(pr => ({ value: { type: 'pr' as const, data: pr }, label: `[PR] #${pr.number} ${pr.title}`, hint: pr.headRefName })),
-    ]
+    // Cache fetched data
+    const cachedIssues = issues
+    const cachedPRs = prs
 
     const selected = await p.autocomplete({
       message: 'Select issue, PR, or create custom:',
-      options,
       maxItems: 15,
-      placeholder: 'Type to filter...',
+      placeholder: 'Type # or title to search...',
+      options() {
+        const search = this.userInput.trim()
+
+        // Base options
+        const baseOptions: { value: Item, label: string, hint?: string }[] = [
+          { value: { type: 'custom' }, label: '+ Custom branch', hint: 'create new' },
+        ]
+
+        // Check if searching for specific number
+        const numMatch = search.match(/^#?(\d+)$/)
+        if (numMatch) {
+          const num = Number(numMatch[1])
+
+          // Check if already in cache
+          const inCache = cachedIssues.some(i => i.number === num) ||
+                          cachedPRs.some(p => p.number === num)
+
+          if (!inCache) {
+            // Live search using detectRefType
+            const found = detectRefType(ctx, num)
+            if (found) {
+              if (found.type === 'pr') {
+                const pr = found.data as PR
+                return [
+                  baseOptions[0],
+                  { value: { type: 'pr', data: pr }, label: `[PR] #${pr.number} ${pr.title}`, hint: pr.headRefName }
+                ]
+              } else {
+                const issue = found.data as Issue
+                return [
+                  baseOptions[0],
+                  { value: { type: 'issue', data: issue }, label: `[Issue] #${issue.number} ${issue.title}` }
+                ]
+              }
+            }
+          }
+        }
+
+        // Return cached results
+        return [
+          ...baseOptions,
+          ...cachedIssues.map(i => ({ value: { type: 'issue' as const, data: i }, label: `[Issue] #${i.number} ${i.title}` })),
+          ...cachedPRs.map(pr => ({ value: { type: 'pr' as const, data: pr }, label: `[PR] #${pr.number} ${pr.title}`, hint: pr.headRefName })),
+        ]
+      }
     })
     if (p.isCancel(selected)) return process.exit(0)
 

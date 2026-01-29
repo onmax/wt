@@ -47,11 +47,18 @@ wt add fix-bug --pr    # create draft PR
 
 ### Interactive Mode
 
-When you run `wt` without arguments, the CLI presents an interactive menu:
+When you run `wt add` without arguments, the CLI presents an autocomplete picker with three options:
 
 1. **Create from Issue** - Select an open GitHub issue, auto-generates branch name
 2. **Create from PR** - Clone an existing PR's branch as a worktree
 3. **Create Custom** - Enter a custom branch name
+
+The picker loads the 100 most recent open issues and PRs for fast initial display. You can search dynamically:
+
+- **By number** - Type `#123` or `123` to find any issue or PR, even if it's not in the initial 100
+- **By title** - Type keywords to filter the cached results
+
+When you search by number, the CLI performs a live lookup if the item isn't already cached. This enables you to access any issue or PR while maintaining fast initial load times.
 
 When creating from an issue, the CLI:
 - Creates a worktree at `../{repo}-worktrees/{branch}`
